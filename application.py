@@ -25,24 +25,6 @@ data['insert_words'] = data[['eat_time', 'sector', 'store', 'menu_type', 'menu',
 # data.head()
 
 
-query = "오늘 같은날 내일은"
-query_embedding = embedder.encode(query)
-
-docs = len(em_array)
-top_k = min(6, len(em_array))
-cos_scores = util.pytorch_cos_sim(query_embedding, em_array)[0]
-top_results = torch.topk(cos_scores, k=top_k)
-
-# print(f"입력 문장: {query}")
-# print(f"<입력 문장과 유사한 {top_k} 개의 문장>")
-
-store_list = []
-for i, (score, idx) in enumerate(zip(top_results[0], top_results[1])):
-    # print(f"{i+1}: {data.store.to_numpy()[idx]} {'(유사도: {:.4f})'.format(score)}")
-    store_list.append(data.store.to_numpy()[idx])
-store_list = list(set(store_list))
-store_list = ', '.join(store_list)
-
 
 
 from flask import Flask, render_template, request
@@ -73,11 +55,37 @@ def format_response(resp, useCallback=False):
 
 # executor = ThreadPoolExecutor(max_workers=1)
 
+# @application.route('/chat-kakao', methods=['POST'])
+# def chat_kakao():
+#     print('request.json', request.json)
+#     response_to_kakao = format_response('짜장면이나 먹어')
+#     return response_to_kakao
+
+executor = ThreadPoolExecutor(max_workers=1)
+
 @application.route('/chat-kakao', methods=['POST'])
 def chat_kakao():
-    print('request.json', request.json)
-    response_to_kakao = format_response('짜장면이나 먹어')
-    return response_to_kakao
+    print("request.json:", request.json)
+    request_message = request.json['userRequest']['utterance']
+    print("request_message:", request_message)
+    query_embedding = embedder.encode(request_message)
+
+    docs = len(em_array)
+    top_k = min(6, len(em_array))
+    cos_scores = util.pytorch_cos_sim(query_embedding, em_array)[0]
+    top_results = torch.topk(cos_scores, k=top_k)
+
+    store_list = []
+    for i, (score, idx) in enumerate(zip(top_results[0], top_results[1])):
+        # print(f"{i+1}: {data.store.to_numpy()[idx]} {'(유사도: {:.4f})'.format(score)}")
+        store_list.append(data.store.to_numpy()[idx])
+    store_list = list(set(store_list))
+    store_list = ', '.join(store_list)
+
+    response_message = store_list
+
+    print("response_message:", response_message)
+    return format_response(response_message)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    application.run(host='0.0.0.0', port=5000)
